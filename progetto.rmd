@@ -1,0 +1,364 @@
+---
+title: "Racchette da tennis"
+author: "Davide Martini"
+output:
+  ioslides_presentation:
+    
+    incremental: yes
+editor_options: 
+  chunk_output_type: inline
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE)
+```
+
+<style>
+slides > slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+</style>
+
+# Introduzione
+
+## Introduzione
+
+**Obiettivo**:
+Capire quale racchetta è la più adatta per un principiante. 
+
+**Domande**:
+
+1. C’è una relazione diretta tra peso e dimensione della racchetta?
+1. Il bilanciamento della racchetta è importante? Dipende dal peso?
+1. Per un principiante è meglio una racchetta con una potenza di impatto della pallina alta o bassa?
+
+
+## Metodologia
+Dataset: [Kaggle](https://www.kaggle.com/datasets/leoyuanluo/tennis-racquets-specs)<br>
+Esempio di tabella non normalizzata da cui sono stati acquisiti i dati grezzi 
+<br>
+<div style="text-align:center"><img src ="img/example.png"/></div>
+
+## Descrizione dataset
+Il datesat  contiene 213 osservazioni di racchette diverse. Le variabili che ho utilizzato sono:
+
+**Variabili quantitative**:
+
+* **Peso** (g)
+* **Dimensione** (in) 
+
+* **Punto di bilanciamento**
+<div style="float:left"><img src ="img/head3.png"/></div>
+<div style="text-align:center"><img src ="img/balance.png"/></div>
+
+## 
+
+**Variabili qualitative**:
+
+* **Swing speed**: è la resistenza di rotazione della racchetta 
+* **Power level**: è la velocità d'impatto che viene restituita alla pallina dopo un colpo 
+* **Tipo bilanciamento**
+* **Composizione**
+
+# Analisi dataset
+
+```{r, echo = FALSE}
+
+library(tidyr)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(modelr)
+library(plotly)
+library(vioplot)
+library(tidyverse)
+library(hrbrthemes)
+
+
+raq <- read.csv("C:/Users/david/Desktop/tennisRacquets.csv", header=T)
+#raq
+#View(raq)
+```
+
+```{r, echo = FALSE}
+#Add id variable
+raq =
+   raq %>% 
+   mutate(id = 1:nrow(raq)) %>% 
+   select (id, everything())
+#raq
+```
+
+```{r, echo = FALSE}
+#tidy
+
+#tidy price (no tidy sample value "$219.99")
+raq$price = gsub("\\$", "", raq$price)
+raq2 <- 
+   raq %>% 
+   #tidy weight (no tidy example value "Strung â\200” 11.4 oz / 323 g Unstrung â\200” 10.8 oz / 305 g")
+   separate(weight, into = c("strung","unstrung"), sep="Unstrung") %>% 
+     separate(strung, into = c("strung_oz","strung_g"), sep="/") %>%
+       mutate(strung_oz = stringr::str_replace(strung_oz, "Strung â\200” ", "")) %>% 
+       mutate(strung_oz = stringr::str_replace(strung_oz, " oz", "")) %>%
+       mutate(strung_g = stringr::str_replace(strung_g, " g", "")) %>%
+     separate(unstrung, into = c("unstrung_oz","unstrung_g"), sep="/") %>%
+       mutate(unstrung_oz = stringr::str_replace(unstrung_oz, "â\200” ", "")) %>% 
+       mutate(unstrung_oz = stringr::str_replace(unstrung_oz, "oz", "")) %>%
+       mutate(unstrung_g = stringr::str_replace(unstrung_g, " g", "")) %>%
+   #tidy head_size (no tidy example value "98 sq. in MP")      MP = mid plus model     OS = over size model
+   mutate(head_size = stringr::str_replace(head_size, " sq. in ", "_")) %>%
+   separate(head_size, into = c("head_size_inches", "head_size_type"), sep = "_") %>%
+   #tidy balance (no tidy example value "6 Pts Head Light")
+   mutate(balance = stringr::str_replace(balance, "Head ight", "Head Light")) %>%
+   mutate(balance = stringr::str_replace(balance, "Head ", "")) %>%
+   #mutate(balance = stringr::str_replace(balance, "Head ight", "Head Light")) %>%
+   mutate(balance = stringr::str_replace(balance, " Pts ", "_")) %>%
+   mutate(balance = stringr::str_replace(balance, " pts ", "_")) %>%
+   mutate(balance = stringr::str_replace(balance, " Pt ", "_")) %>%
+   mutate(balance = stringr::str_replace(balance, " Points ", "_")) %>%
+   mutate(balance = stringr::str_replace(balance, " Point ", "_")) %>%
+   mutate(balance = stringr::str_replace(balance, "Even Balance", "0_Even")) %>%
+   separate(balance, into = c("balance_point", "balance_type"), sep = "_") %>%
+   #tidy beam_width (no tidy example value "20/21.5/21mm")
+   mutate(beam_width = stringr::str_replace(beam_width, "mm", "")) %>%
+   separate(beam_width, into = c("beam_width_middle", "beam_width_top", "beam_width_bottom"), sep = "/") %>%
+   #tidy composition (no tidy example value "HTR/Graphite")
+   mutate(composition = stringr::str_replace(composition, " / ", "/")) %>%
+   mutate(composition = stringr::str_replace(composition, "&", "/")) %>%
+   separate(composition, into = c("composition1", "composition2", "composition3"), sep = "/") %>%
+   #tidy length (no tidy example value "27 inches")
+   mutate(length = stringr::str_replace(length, "inches", "")) %>%
+   #tidy swing_sp (no tidy example value "Fast, Long Swing")       Fast = Long Swing   Medium = Moderate Swing   Slow = Compact Swing
+   mutate(swing_sp = stringr::str_replace(swing_sp, ", Long Swing", "")) %>%
+   mutate(swing_sp = stringr::str_replace(swing_sp, ", Moderate Swing", "")) %>%
+   mutate(swing_sp = stringr::str_replace(swing_sp, ", Compact Swing", "")) %>%
+   #tidy tension
+   mutate(tension = stringr::str_replace(tension, "Pounds", "")) %>%
+   separate(tension, into = c("tension_min", "tension_max"), sep = "-") %>%
+   
+   select(id, brand, price, length, strung_g, unstrung_g, strung_oz, unstrung_oz, composition1, composition2, composition3, beam_width_bottom,   beam_width_middle, beam_width_top, unstrung_oz, unstrung_g, head_size_inches, head_size_type, balance_point, balance_type, flex, power_lv, swing_sp, swing_we, tension_min, tension_max) 
+               
+   
+#raq2
+```
+```{r, echo = FALSE}
+ options(digits=6)
+ raq2$price <- as.double(raq2$price)
+ raq2$length <- as.double(raq2$length)
+ raq2$unstrung_g <- as.integer(raq2$unstrung_g)
+ raq2$unstrung_oz <- as.double(raq2$unstrung_oz)
+ raq2$strung_g <- as.integer(raq2$strung_g)
+ raq2$strung_oz <- as.double(raq2$strung_oz)
+ raq2$beam_width_bottom <- as.double(raq2$beam_width_bottom)
+ raq2$beam_width_middle <- as.double(raq2$beam_width_middle)
+ raq2$beam_width_top <- as.double(raq2$beam_width_top)
+ raq2$head_size_inches <- as.integer(raq2$head_size_inches)
+ raq2$balance_point <- as.integer(raq2$balance_point)
+ raq2$flex <- as.integer(raq2$flex)
+ raq2$swing_we <- as.integer(raq2$swing_we)
+ raq2$tension_min <- as.integer(raq2$tension_min)
+ raq2$tension_max <- as.integer(raq2$tension_max)
+ #raq2
+ #View(raq2)
+```
+
+```{r, echo = FALSE}
+
+#  raq2 %>%
+#  #conversione da pollici in centimetri
+#  mutate(head_size_cm = round(head_size_inches / 0.3937)) %>%  
+#  select(head_size_inches, head_size_cm) 
+#raq2   
+```
+
+```{r, echo = FALSE}
+#NA, queste racchette non esistono, non sono mai state prodotte
+raq2 <- raq2[ !(raq2$id %in% c(193, 212, 209)), ]
+#raq2
+```
+
+## Analisi variabile peso   
+
+```{r, echo = FALSE}
+par(mfrow=c(1,2))
+
+boxplot(raq2$unstrung_g,ylab="Peso (g)", main="Boxplot")
+points(mean(raq2$unstrung_g), col="red", pch=4, lwd=1)
+
+h1 <- hist(raq2$unstrung_g, probability = TRUE, main='Istogramma', xlab='Peso (g)', ylab='Densità (freq rel)', nclass = 20)
+#h1$breaks
+lines(density(raq2$unstrung_g),col='blue',lwd=2) #stima della densità
+curve(dnorm(x, mean(raq2$unstrung_g), sd(raq2$unstrung_g)), col="#fc7474", lwd=0.5, add=TRUE) 
+abline(h=mean(raq2$unstrung_g))
+```
+Media
+```{r, echo = FALSE}
+mean(raq2$unstrung_g)  
+```
+Mediana
+```{r, echo = FALSE}
+median(raq2$unstrung_g) 
+```
+Quantile
+```{r, echo = FALSE}
+quantile(raq2$unstrung_g)
+```
+
+## Analisi variabile dimensione
+
+```{r, echo = FALSE}
+par(mfrow=c(1,2))
+
+boxplot(raq2$head_size_inches,ylab="Dimensione (in)", main="Boxplot", font.main=4,col.main="blue")
+points(mean(raq2$head_size_inches), col="red", pch=4, lwd=1)
+
+hist(raq2$head_size_inches, probability = TRUE, main='Istogramma', col.main="blue", xlab='Dimensione (in)', ylab='Densità (freq rel)', nclass = 20)
+#h1$breaks
+lines(density(raq2$head_size_inches),col='blue',lwd=2, alpha = 0.5) #stima della densità
+curve(dnorm(x, mean(raq2$head_size_inches), sd(raq2$head_size_inches)), col="#fc5d5d", lwd=0.5, add=TRUE) 
+
+```
+Media
+```{r, echo = FALSE}
+mean(raq2$head_size_inches)  
+```
+Mediana
+```{r, echo = FALSE}
+median(raq2$head_size_inches) 
+```
+Quantile
+```{r, echo = FALSE}
+quantile(raq2$head_size_inches)
+```
+
+
+
+
+## Come cambia il peso della racchetta in relazione alla grandezza?
+
+
+```{r, echo = FALSE}
+p <- ggplot(data = raq2, mapping = aes(x = unstrung_g, y = head_size_inches, size=price), main="Scatterplot") +
+      geom_point(alpha=0.65) +
+      geom_smooth(size=0.85, se = FALSE) +
+      scale_size(range = c(.1, 3), name="Prezzo ($)") +
+      theme_ipsum() +
+      theme(legend.position="bottom") +
+      ylab("Dimensione (in)") +
+      xlab("Peso (g)") +
+      theme(legend.position="none") +
+      ggtitle("Scatterplot") +
+      theme_light()
+
+
+p + theme(
+  plot.title = element_text(color="blue", size=14, face="bold")
+)
+
+cor.test(raq2$head_size_inches, raq2$unstrung_g, method="pearson")
+
+```
+
+## Il bilanciamento della racchetta è importante? Dipende dal peso?
+
+
+```{r, echo = FALSE}
+ggplot(data = raq2, mapping = aes(x = unstrung_g, y = balance_point)) +
+      geom_point() +
+      ylab("Bilanciamento") +
+      xlab("Peso (g)") +
+      geom_smooth( se = TRUE) +
+      ggtitle("Relazione tra peso e bilanciamento") +
+      theme_light()
+```
+
+```{r, echo = FALSE}
+p <- ggplot(data = raq2, mapping = aes(x = unstrung_g, y = balance_point, shape = balance_type, colour = balance_type) ) +
+      geom_point(size=1.5, alpha = 0.8) +
+      ylab("Bilanciamento") +
+      xlab("Peso (g)") +
+      geom_smooth(size=0.5, se = FALSE) +
+      geom_label(
+       label="", 
+       x=378,
+       y=7,
+       label.padding = unit(0.55, "lines"), # Rectangle size around label
+       label.size = 0.35,
+       color = "black",
+       fill="#69b3a2"
+      ) +
+      theme_bw()
+ggplotly(p)
+
+```
+
+
+   
+```{r, echo = FALSE}
+#Ho fatto l’analisi di correlazione solo per la modalità Light perché  il numero di campioni/osservazioni (182) è adeguato a differenza delle altre  modalità Heavy e Even
+#   only_balance_even = filter(raq2,  balance_type == "Even")
+#   only_balance_heavy = filter(raq2,  balance_type == "Heavy")
+#   only_balance_light = filter(raq2,  balance_type == "Light")
+
+
+#   cor(only_balance_even$unstrung_g, only_balance_even$balance_point)
+#   cor(only_balance_heavy$unstrung_g, only_balance_heavy$balance_point)
+#   cor(only_balance_light$unstrung_g, only_balance_light$balance_point)
+```
+
+## Per un principiante è meglio una racchetta con una potenza di impatto della pallina alta o bassa?
+
+Per rispondere a questa domanda ho creato questo istogramma e mi sono chiesto se la potenza di impatto ha effetto rispetto allo swing speed.
+```{r, echo = FALSE}
+#Variabile qualitativa
+
+ p2 <- ggplot(data = raq2) +
+   geom_bar(mapping = aes(x = power_lv, fill = swing_sp), outcome = c("Low", "Medium", "High")) +
+   
+   xlab("Potenza d'impatto") +
+   ggtitle("Istogramma") 
+   
+ggplotly()
+```
+
+
+
+## Violin Boxplot
+
+Si osserva che per racchette con peso alto si ha una potenza d'impatto bassa e inversamente per racchette con grandi dimensioni si ha una potenza d'impatto alta.
+
+```{r, echo = FALSE}
+par(mfrow=c(1,2))
+with(raq2 , vioplot( 
+  head_size_inches[power_lv=="Low"], head_size_inches[power_lv=="Medium"], head_size_inches[power_lv=="High"],
+  col="#cfcccc" , names=c("Bassa","Media","Alta"), main='Violin Boxplot', col.main="blue", xlab='Potenza impatto', ylab='Dimensione racchetta (in)'
+))
+
+
+with(raq2 , vioplot( 
+  unstrung_g[power_lv=="Low"], unstrung_g[power_lv=="Medium"], unstrung_g[power_lv=="High"],
+  col="#cfcccc" , names=c("Bassa","Media","Alta"), main='Violin Boxplot', col.main="blue", xlab='Potenza impatto', ylab='Peso racchetta (g)'
+))
+```
+
+Per un principiante una racchetta di dimensioni grandi facilita i colpi per una maggior presenza di "sweetspot" (zone d'impatto utili) ma questo porta a una potenza di impatto alta che porta a colpi imprecisi e decentrati, difficili da gestire per un principiante; a differenza con potenza di impatto media-bassa.
+
+
+Ho creato una lista di racchette che secondo me sono più adatte ai principianti
+
+```{r, echo = FALSE}
+raq2 %>% 
+  filter(balance_type == "Even", unstrung_g >= "270", length >= "27") %>% 
+  select(id, brand, composition1, price)
+```
+
+
+
+
+
+
+
+
