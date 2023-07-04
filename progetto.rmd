@@ -3,11 +3,11 @@ title: "Racchette da tennis"
 author: "Davide Martini"
 output:
   ioslides_presentation:
-    
     incremental: yes
-editor_options: 
+  slidy_presentation:
+    incremental: yes
+editor_options:
   chunk_output_type: inline
-  
 ---
 
 ```{r setup, include=FALSE}
@@ -251,6 +251,9 @@ p <- ggplot(data = raq2, mapping = aes(x = unstrung_g, y = head_size_inches, siz
       xlab("Peso (g)") +
       theme(legend.position="none") +
       ggtitle("Scatterplot") +
+      annotate('text', x = 287, y =139, label = 'id: #185') +
+      labs(
+      subtitle = "id #185 è un'eccezione per la sua grande dimensione") +
       theme_light()
 
 
@@ -259,6 +262,7 @@ p + theme(
 )
 
 cor.test(raq2$head_size_inches, raq2$unstrung_g, method="pearson")
+lm(raq2$head_size_inches ~ raq2$unstrung_g)
 
 ```
 
@@ -346,19 +350,14 @@ with(raq2 , vioplot(
 
 Per un principiante una racchetta di dimensioni grandi facilita i colpi per una maggior presenza di "sweetspot" (zone d'impatto utili) ma questo porta a una potenza di impatto alta che porta a colpi imprecisi e decentrati, difficili da gestire per un principiante; a differenza con potenza di impatto media-bassa.
 
+## Conclusione
+
+Ricapitolando, è preferibile per un principiante una racchetta con bilanciamento pari, un peso tra 260 e 300 grammi e una dimensione maggiore di 100 pollici.
 
 Ho creato una lista di racchette che secondo me sono più adatte ai principianti
 
 ```{r, echo = FALSE}
 raq2 %>% 
-  filter(balance_type == "Even", unstrung_g >= "270", length >= "27") %>% 
+  filter(balance_type == "Even", unstrung_g >= "270", head_size_inches >= "100") %>% 
   select(id, brand, composition1, price)
 ```
-
-
-
-
-
-
-
-
