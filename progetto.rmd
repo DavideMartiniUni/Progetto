@@ -358,6 +358,6 @@ Ho creato una lista di racchette che secondo me sono più adatte ai principianti
 
 ```{r, echo = FALSE}
 raq2 %>% 
-  filter(balance_type == "Even", unstrung_g >= "270", head_size_inches >= "100") %>% 
+  filter(balance_type == "Even", unstrung_g >= "270" &  unstrung_g <= "300", head_size_inches >= "100") %>% 
   select(id, brand, composition1, price)
 ```
